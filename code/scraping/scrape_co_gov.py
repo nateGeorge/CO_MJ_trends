@@ -39,6 +39,8 @@ med_months = []
 rec_months = []
 med_years = []
 rec_years = []
+med_dates = []
+rec_dates = []
 all_med_tax = []
 all_med_counties = []
 all_rec_tax = []
@@ -50,6 +52,7 @@ for f in filenames:
     #timestamp = time.strptime(month_year, '%m%y')
     month = int(month_year[:2])
     year = int('20' + month_year[2:])
+    month_year = str(month) + '-01' + '-' + str(year)
 
     data = pd.read_excel('data/' + f, header=None)
 
@@ -71,6 +74,7 @@ for f in filenames:
         tax_med.append(data.iloc[i, 1])
         med_months.append(month)
         med_years.append(year)
+        med_dates.append(month_year)
 
     startRow = data[data[3] == 'County'].index.values[0] + 1
     lastRow = data[data[3].str.startswith('Total', na=False)].index.values[0] # up to but not including
@@ -84,6 +88,7 @@ for f in filenames:
         tax_rec.append(data.iloc[i, 4])
         rec_months.append(month)
         rec_years.append(year)
+        rec_dates.append(month_year)
 
     all_med_counties.extend(counties_med)
     all_rec_counties.extend(counties_rec)
@@ -107,8 +112,8 @@ unique_rec_counties = unique_rec_counties.sort_values()
 #     blank[i, 2] = m
 #     blank[i, 3] = r
 
-df = pd.DataFrame(OrderedDict({'county':all_med_counties, 'year':med_years, 'month':med_months, '2.9%tax':all_med_tax}))
-
+df = pd.DataFrame(OrderedDict({'county':all_med_counties, 'year':med_years, 'month':med_months, 'date':med_dates, '2.9%tax':all_med_tax}))
+df.to_csv('data/med_taxes_2.9.csv')
 # this is here because I was trying to think of the best way to organize the data
 # for c in unique_med_counties:
 #     med_rev_dict[c] = []
