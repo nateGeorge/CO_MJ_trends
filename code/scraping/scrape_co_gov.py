@@ -10,110 +10,158 @@ import numpy as np
 
 URL = 'https://www.colorado.gov/pacific/revenue/colorado-marijuana-tax-data'
 
-res = req.get(URL)
-soup = bs(res.content, 'lxml')
-# found 7 of these...not super easy to grab the right ones
-tables = soup.findAll('div', {'class':'fieldset-wrapper'})
-# abandoning BeautifulSoup in favor of lxml
-tree = html.fromstring(res.content)
-mj_state_tax_current = tree.xpath('//*[@id="collapse-text-dynamic-form-number-1"]/div/div[2]/fieldset/div/ul/li/ul')
-lis = mj_state_tax_current[0].findall('li')
-links = []
-filenames = []
-for l in lis:
-    templink = l.find('a').get('href')
-    links.append(templink)
-    templink = re.sub('%2\d', '_', templink.split('/')[-1])
-    templink = re.sub('_+', '_', templink)
-    filenames.append(templink)
+def clean_filename(web_link):
+    '''
+    cleans filenames from web link
 
-for l, f in zip(links, filenames):
-    testfile = urllib.URLopener()
-    testfile.retrieve(l, 'data/' + f)
+    args:
+    web_link -- string; link to excel file to download
+    returns:
+    cleaned_filename -- string; filename that is
+
+    '''
+    templink = re.sub('%2\d', '_', web_link.split('/')[-1])
+    cleaned_filename = re.sub('_+', '_', templink)
+    return cleaned_filename
 
 
-# of course, the data is super sloppy and counties differ in each file.
-# first, go through each file to get list of all counties so we can the build
-# up the dataframe of county/year/tax revenue
-med_months = []
-rec_months = []
-med_years = []
-rec_years = []
-med_dates = []
-rec_dates = []
-all_med_tax = []
-all_med_counties = []
-all_rec_tax = []
-all_rec_counties = []
+def scrape_current_sales_tax():
+    '''
+    scrapes the archived sales tax data from
+    https://www.colorado.gov/pacific/revenue/colorado-marijuana-tax-data
+    '''
+    res = req.get(URL)
+    soup = bs(res.content, 'lxml')
+    # found 7 of these...not super easy to grab the right ones
+    #tables = soup.findAll('div', {'class':'fieldset-wrapper'})
+    # abandoning BeautifulSoup in favor of lxml
+    tree = html.fromstring(res.content)
+    mj_state_tax_current = tree.xpath('//*[@id="collapse-text-dynamic-form-number-1"]/div/div[2]/fieldset/div/ul/li/ul')
+    lis = mj_state_tax_current[0].findall('li')
+    links = []
+    filenames = []
+    for l in lis:
+        templink = l.find('a').get('href')
+        links.append(templink)
+        filename = clean_filename(templink)
+        filenames.append(filename)
 
-for f in filenames:
-    month_year = f.split('_')[0]
-    # this would convert the date to a timestamp, but not going to do that anymore
-    #timestamp = time.strptime(month_year, '%m%y')
-    month = int(month_year[:2])
-    year = int('20' + month_year[2:])
-    month_year = str(month) + '-01' + '-' + str(year)
+    for l, f in zip(links, filenames):
+        testfile = urllib.URLopener()
+        testfile.retrieve(l, 'data/' + f)
 
-    data = pd.read_excel('data/' + f, header=None)
+def scrape_old_sales_tax():
+    '''
+    scrapes the archived sales tax data from
+    https://www.colorado.gov/pacific/revenue/colorado-marijuana-tax-data
+    '''
+    res = req.get(URL)
+    soup = bs(res.content, 'lxml')
+    tree = html.fromstring(res.content)
+    mj_state_tax_arch = tree.xpath('//*[@id="collapse-text-dynamic-form-number-1"]/div/fieldset[2]/div/div[1]/fieldset[2]/div/ul')
+    years = mj_state_tax_arch[0].findall('li')
+    links = []
+    filenames = []
+    for y in years:
+        ul = y.findall('ul')[0]
+        links_li = ul.findall('li')
+        for l in links_li:
+            templink = l.find('a').get('href')
+            links.append(templink)
+            filename = clean_filename(templink)
+            filenames.append(filename)
 
-    # parse medical county and total 2.9% tax
-    # first get row number of county header and last row (with "totals")
-    startRow = data[data[0] == 'County'].index.values[0] + 1
-    lastRow = data[data[0].str.startswith('Total', na=False)].index.values[0] # up to but not including
 
-    counties_med = []
-    counties_rec = []
-    tax_med = []
-    tax_rec = []
-    for i in range(startRow, lastRow):
-        if re.search('remainder', data.iloc[i, 0], re.IGNORECASE):
-            counties_med.append('Other Counties')
-        else:
-            counties_med.append(data.iloc[i, 0])
 
-        tax_med.append(data.iloc[i, 1])
-        med_months.append(month)
-        med_years.append(year)
-        med_dates.append(month_year)
 
-    startRow = data[data[3] == 'County'].index.values[0] + 1
-    lastRow = data[data[3].str.startswith('Total', na=False)].index.values[0] # up to but not including
 
-    for i in range(startRow, lastRow):
-        if re.search('remainder', data.iloc[i, 3], re.IGNORECASE):
-            counties_rec.append('Other Counties')
-        else:
-            counties_rec.append(data.iloc[i, 3])
+def parse_sales_tax():
+    # of course, the data is super sloppy and counties differ in each file.
+    # first, go through each file to get list of all counties so we can the build
+    # up the dataframe of county/year/tax revenue
+    med_months = []
+    rec_months = []
+    med_years = []
+    rec_years = []
+    med_dates = []
+    rec_dates = []
+    all_med_tax = []
+    all_med_counties = []
+    all_rec_tax = []
+    all_rec_counties = []
 
-        tax_rec.append(data.iloc[i, 4])
-        rec_months.append(month)
-        rec_years.append(year)
-        rec_dates.append(month_year)
+    for f in filenames:
+        month_year = f.split('_')[0]
+        # this would convert the date to a timestamp, but not going to do that anymore
+        #timestamp = time.strptime(month_year, '%m%y')
+        month = int(month_year[:2])
+        year = int('20' + month_year[2:])
+        month_year = str(month) + '-01' + '-' + str(year)
 
-    all_med_counties.extend(counties_med)
-    all_rec_counties.extend(counties_rec)
-    all_med_tax.extend(tax_med)
-    all_rec_tax.extend(tax_rec)
+        data = pd.read_excel('data/' + f, header=None)
 
-unique_med_counties = pd.Series(np.unique(all_med_counties))
-unique_rec_counties = pd.Series(np.unique(all_rec_counties))
-#remove 'remainder' entries since there are multiple with minor diffs
-unique_med_counties = unique_med_counties.drop(unique_med_counties[unique_med_counties.str.startswith('Remainder')].index.values)
-unique_med_counties = unique_med_counties.append(pd.Series(['Other Counties']))
-unique_rec_counties = unique_rec_counties.drop(unique_rec_counties[unique_rec_counties.str.startswith('Remainder')].index.values)
-unique_rec_counties = unique_rec_counties.append(pd.Series(['Other Counties']))
-unique_med_counties = unique_med_counties.sort_values()
-unique_rec_counties = unique_rec_counties.sort_values()
+        # parse medical county and total 2.9% tax
+        # first get row number of county header and last row (with "totals")
+        startRow = data[data[0] == 'County'].index.values[0] + 1
+        lastRow = data[data[0].str.startswith('Total', na=False)].index.values[0] # up to but not including
 
-# blank = np.zeros(shape=(unique_rec_counties.shape[0]*len(filenames)*len(unique()), 3))
-# for i, c, m, y, r in enumerate(zip(all_rec_counties, rec_months, rec_years, all_rec_tax)):
-#     blank[i, 0] = c
-#     blank[i, 1] = y
-#     blank[i, 2] = m
-#     blank[i, 3] = r
+        counties_med = []
+        counties_rec = []
+        tax_med = []
+        tax_rec = []
+        for i in range(startRow, lastRow):
+            if re.search('remainder', data.iloc[i, 0], re.IGNORECASE):
+                counties_med.append('Other Counties')
+            else:
+                counties_med.append(data.iloc[i, 0])
 
-df = pd.DataFrame(OrderedDict({'county':all_med_counties, 'year':med_years, 'month':med_months, 'date':med_dates, '2.9%tax':all_med_tax}))
-df.to_csv('data/med_taxes_2.9.csv')
+            tax_med.append(data.iloc[i, 1])
+            med_months.append(month)
+            med_years.append(year)
+            med_dates.append(month_year)
+
+        startRow = data[data[3] == 'County'].index.values[0] + 1
+        lastRow = data[data[3].str.startswith('Total', na=False)].index.values[0] # up to but not including
+
+        for i in range(startRow, lastRow):
+            if re.search('remainder', data.iloc[i, 3], re.IGNORECASE):
+                counties_rec.append('Other Counties')
+            else:
+                counties_rec.append(data.iloc[i, 3])
+
+            tax_rec.append(data.iloc[i, 4])
+            rec_months.append(month)
+            rec_years.append(year)
+            rec_dates.append(month_year)
+
+        all_med_counties.extend(counties_med)
+        all_rec_counties.extend(counties_rec)
+        all_med_tax.extend(tax_med)
+        all_rec_tax.extend(tax_rec)
+
+    unique_med_counties = pd.Series(np.unique(all_med_counties))
+    unique_rec_counties = pd.Series(np.unique(all_rec_counties))
+    #remove 'remainder' entries since there are multiple with minor diffs
+    unique_med_counties = unique_med_counties.drop(unique_med_counties[unique_med_counties.str.startswith('Remainder')].index.values)
+    unique_med_counties = unique_med_counties.append(pd.Series(['Other Counties']))
+    unique_rec_counties = unique_rec_counties.drop(unique_rec_counties[unique_rec_counties.str.startswith('Remainder')].index.values)
+    unique_rec_counties = unique_rec_counties.append(pd.Series(['Other Counties']))
+    unique_med_counties = unique_med_counties.sort_values()
+    unique_rec_counties = unique_rec_counties.sort_values()
+
+    # blank = np.zeros(shape=(unique_rec_counties.shape[0]*len(filenames)*len(unique()), 3))
+    # for i, c, m, y, r in enumerate(zip(all_rec_counties, rec_months, rec_years, all_rec_tax)):
+    #     blank[i, 0] = c
+    #     blank[i, 1] = y
+    #     blank[i, 2] = m
+    #     blank[i, 3] = r
+
+    df = pd.DataFrame(OrderedDict({'county':all_med_counties, 'year':med_years, 'month':med_months, 'date':med_dates, '2.9%tax':all_med_tax}))
+    df.to_csv('data/med_taxes_2.9.csv')
+
+
+if __name__ == "__main__":
+
 # this is here because I was trying to think of the best way to organize the data
 # for c in unique_med_counties:
 #     med_rev_dict[c] = []
